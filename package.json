@@ -6,15 +6,20 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
-    "restart": "nodemon server.js",
-    "electron": "electron main.js"
+    "restart": "nodemon server.js"
   },
   "private": true,
   "dependencies": {
-    "blessed": "^0.1.81",
-    "blessed-contrib": "^4.11.0",
+    "blessed-contrib": "^1.0.11",
+    "charms": "^0.0.4",
+    "charsm": "^0.2.0",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "depcheck": "^1.4.7",
     "express": "^4.21.2",
+    "fs": "^0.0.1-security",
+    "morgan": "^1.10.0",
+    "open": "^10.1.0",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {

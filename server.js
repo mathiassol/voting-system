@@ -3,14 +3,23 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./DataBase');
 const readline = require('readline');
+const { exec } = require('child_process');
+const morgan = require('morgan');
+const fs = require('fs');
+const crypto = require('crypto');
+
+function encryptID(id) {
+    return crypto.createHash('sha256').update(id).digest('hex');
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 let activePool = 'Team Selection';
+let server;
+let monitorActive = false;
 
 app.post('/add-voter', (req, res) => {
     const { id, name } = req.body;
@@ -24,12 +33,20 @@ app.post('/add-voter', (req, res) => {
 
 app.post('/login', (req, res) => {
     const { id, name } = req.body;
-    db.get('SELECT * FROM voters WHERE id = ? AND name = ?', [id, name], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (row) return res.json({ success: true, message: 'Login successful' });
+
+    const encryptedId = encryptID(id);
+
+    db.get('SELECT * FROM voters WHERE id = ? AND name = ?', [encryptedId, name], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (row) {
+            return res.json({ success: true, message: 'Login successful' });
+        }
         res.status(401).json({ success: false, message: 'Invalid ID or Name' });
     });
 });
+
 
 app.get('/view-pool', (req, res) => {
     db.get('SELECT * FROM pool WHERE poolName = ?', [activePool], (err, row) => {
@@ -76,105 +93,147 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-let server = app.listen(3000, '0.0.0.0', () => {
-    console.log('Server running on http://0.0.0.0:3000');
-});
-
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
 rl.on('line', (input) => {
-    const [command, type, target, ...args] = input.split(' ');
+    const [command, ...args] = input.split(' ');
 
-    if (command === 'add') {
+    if (command === 'start') {
+        if (!server) {
+            server = app.listen(3000, '0.0.0.0', () => {
+                console.log('Server running on http://0.0.0.0:3000');
+            });
+        } else {
+            console.log('Server is already running.');
+        }
+    } else if (command === 'stop') {
+        if (server) {
+            server.close(() => {
+                console.log('Server stopped.');
+                server = null;
+            });
+        } else {
+            console.log('Server is not running.');
+        }
+    } else if (command === 'add') {
+        const [type, ...details] = args;
+
         if (type === 'voter') {
-            const [name, id] = args;
-            db.run('INSERT INTO voters (id, name) VALUES (?, ?)', [id, name], (err) => {
+            if (details.length !== 2) {
+                console.log('Usage: add voter <id> <name>');
+                return;
+            }
+            const [id, name] = details;
+            const encryptedId = encryptID(id); // Encrypt the ID
+
+            // Add voter with encrypted ID
+            db.run('INSERT INTO voters (id, name) VALUES (?, ?)', [encryptedId, name], (err) => {
                 if (err) {
-                    console.error('Error adding voter:', err.message);
+                    console.log('Error adding voter:', err.message);
                 } else {
                     console.log('Voter added successfully');
                 }
             });
         } else if (type === 'pool') {
-            const [poolName, ...options] = args;
-            const optionsJson = JSON.stringify(options);
-            const votesJson = JSON.stringify({});
-            db.run('INSERT INTO pool (poolName, options, votes) VALUES (?, ?, ?)', [poolName, optionsJson, votesJson], (err) => {
+            if (details.length < 2) {
+                console.log('Usage: add pool <poolName> <option1> <option2> ...');
+                return;
+            }
+            const poolName = details[0];
+            const options = details.slice(1);
+            const votes = {};
+
+            // Delete the previous pool if it exists
+            db.run('DELETE FROM pool WHERE poolName = ?', [poolName], (err) => {
                 if (err) {
-                    console.error('Error creating pool:', err.message);
+                    console.log('Error deleting previous pool:', err.message);
                 } else {
-                    console.log('Pool created successfully');
+                    console.log('Previous pool deleted (if existed).');
+                }
+
+                // Add the new pool to the database
+                db.run('INSERT INTO pool (poolName, options, votes) VALUES (?, ?, ?)', [poolName, JSON.stringify(options), JSON.stringify(votes)], (err) => {
+                    if (err) {
+                        console.log('Error adding pool:', err.message);
+                    } else {
+                        console.log('Pool added successfully');
+                    }
+                });
+
+                // Set the new pool as active
+                activePool = poolName;
+                console.log(`Active pool set to: ${activePool}`);
+            });
+        } else {
+            console.log('Unknown type. Usage: add <voter|pool>');
+        }
+    } else if (command === 'remove') {
+        const [type, id] = args;
+
+        if (type === 'voter' && id) {
+            const encryptedId = encryptID(id); // Encrypt the ID for removal
+
+            // Remove voter based on encrypted ID
+            db.run('DELETE FROM voters WHERE id = ?', [encryptedId], (err) => {
+                if (err) {
+                    console.log('Error removing voter:', err.message);
+                } else {
+                    console.log(`Voter with ID ${id} removed successfully`);
                 }
             });
         } else {
-            console.log('Unknown type for add command');
+            console.log('Usage: remove voter <id>');
         }
-    } else if (command === 'restart') {
-        console.log('Restarting server...');
-        server.close(() => {
-            server = app.listen(3000, '0.0.0.0', () => {
-                console.log('Server restarted on http://0.0.0.0:3000');
+    } else if (command === 'monitor') {
+        const logFile = path.join(__dirname, 'server.log');
+
+        exec('node monitor.js', (err, stdout, stderr) => {
+            if (err) console.error('Error starting monitor.js:', err);
+        });
+
+        if (process.platform === 'win32') {
+            exec(`start cmd /k "node monitor.js"`);
+        } else {
+            exec(`gnome-terminal -- bash -c "node monitor.js; exec bash"`);
+        }
+        const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+        app.use(morgan('combined', { stream: logStream }));
+
+        monitorActive = true;
+        console.log('Monitoring server traffic in a new terminal.');
+    } else if (command === 'wipedb') {
+        db.serialize(() => {
+            db.run('DELETE FROM voters', (err) => {
+                if (err) {
+                    console.error('Error deleting voters:', err.message);
+                    return;
+                }
+                console.log('All voters have been deleted.');
+            });
+
+            db.run('DELETE FROM pool', (err) => {
+                if (err) {
+                    console.error('Error deleting pool records:', err.message);
+                    return;
+                }
+                console.log('All pool records have been deleted.');
             });
         });
-    } else if (command === 'setactivepool') {
-        const [poolName] = args;
-        activePool = poolName;
-        console.log(`Active pool set to: ${activePool}`);
-    } else if (command === 'cls') {
-        console.clear();
-    } else if (command === 'wipedb') {
-        if (type === 'voters') {
-            if (target === 'all') {
-                db.run('DELETE FROM voters', (err) => {
-                    if (err) {
-                        console.error('Error wiping voters table:', err.message);
-                    } else {
-                        console.log('Voters table wiped successfully');
-                    }
-                });
-            } else {
-                db.run('DELETE FROM voters WHERE name = ?', [target], (err) => {
-                    if (err) {
-                        console.error(`Error wiping voter ${target}:`, err.message);
-                    } else {
-                        console.log(`Voter ${target} wiped successfully`);
-                    }
-                });
-            }
-        } else if (type === 'pool') {
-            if (target === 'all') {
-                db.run('DELETE FROM pool', (err) => {
-                    if (err) {
-                        console.error('Error wiping pool table:', err.message);
-                    } else {
-                        console.log('Pool table wiped successfully');
-                    }
-                });
-            } else {
-                db.run('DELETE FROM pool WHERE poolName = ?', [target], (err) => {
-                    if (err) {
-                        console.error(`Error wiping pool ${target}:`, err.message);
-                    } else {
-                        console.log(`Pool ${target} wiped successfully`);
-                    }
-                });
-            }
-        } else {
-            console.log('Unknown type for wipedb command');
-        }
-    } else if (/help|\?/.test(command)) {
-        console.log('Available commands:');
-        console.log('  add voter <name> <id> - Add a new voter');
-        console.log('  add pool <poolName> <option1> <option2> ... - Create a new pool');
-        console.log('  restart - Restart the server');
-        console.log('  showdb - Show the database tables and their contents');
-        console.log('  setactivepool <poolName> - Set the active pool');
-        console.log('  cls - Clear the console');
-        console.log('  wipedb voters <name|all> - Wipe voters table or a specific voter');
-        console.log('  wipedb pool <poolName|all> - Wipe pool table or a specific pool');
     } else {
         console.log('Unknown command');
     }
 });
+
+process.on('exit', () => {
+    exec('taskkill /F /IM node.exe', (err, stdout, stderr) => {
+        if (err) {
+            console.error(`Error executing taskkill: ${err.message}`);
+            return;
+        }
+        console.log('Node processes terminated.');
+    });
+});
+
+console.log('Type "start" to start the server, "stop" to stop it :)');
