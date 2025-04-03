@@ -1,0 +1,24 @@
+{
+  "name": "Voting-system",
+  "version": "1.0.0",
+  "description": "",
+  "main": "public/Voting-Controller.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon server.js",
+    "restart": "nodemon server.js",
+    "electron": "electron main.js"
+  },
+  "private": true,
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "electron": "^35.1.2",
+    "nodemon": "^3.1.9"
+  }
+}

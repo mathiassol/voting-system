@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting System</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div class="container" id="login-container">
+    <h2>Login</h2>
+    <input type="text" id="name" placeholder="Enter Name">
+    <input type="text" id="id" placeholder="Enter ID">
+    <button onclick="login()">Login</button>
+    <p id="message"></p>
+</div>
+
+<div class="view-container" id="view-container">
+    <h2>Voting Pool</h2>
+    <div id="pool">
+        <select id="team-select"></select>
+        <button id="vote-button" onclick="vote()">Vote</button>
+    </div>
+</div>
+
+<canvas id="vote-chart"></canvas>
+<button id="refresh-button" onclick="refreshChart()">Refresh Chart</button>
+
+<script>
+    function login() {
+        const id = document.getElementById('id').value;
+        const name = document.getElementById('name').value;
+
+        fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, name })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('message').innerText = 'Login successful';
+                    document.getElementById('login-container').style.display = 'none';
+                    document.getElementById('view-container').style.display = 'block';
+                    document.getElementById('refresh-button').style.display = 'block';
+                    fetchTeams();
+                } else {
+                    document.getElementById('message').innerText = 'Login failed: ' + data.message;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('message').innerText = 'An error occurred';
+            });
+    }
+
+    function fetchTeams() {
+        fetch('/teams')
+            .then(response => response.json())
+            .then(data => {
+                const teamSelect = document.getElementById('team-select');
+                teamSelect.innerHTML = '';
+                data.teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team.id;
+                    option.text = team.name;
+                    teamSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching teams:', error);
+            });
+    }
+
+    function vote() {
+        const id = document.getElementById('id').value;
+        const vote = document.getElementById('team-select').value;
+
+        fetch('/vote', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, vote })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Vote recorded');
+                    refreshChart();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+
+    function refreshChart() {
+        fetch('/view-pool')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const ctx = document.getElementById('vote-chart').getContext('2d');
+                    const votes = data.pool.votes;
+                    const labels = data.pool.options;
+                    const voteCounts = labels.map(option => Object.values(votes).filter(vote => vote === option).length);
+
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Votes',
+                                data: voteCounts,
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing chart:', error);
+            });
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="Voting-Controller.js"></script>
+</body>
+</html>
