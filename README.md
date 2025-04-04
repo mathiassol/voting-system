@@ -25,7 +25,7 @@ list off commands use````help or ?```` in the server terminal.
 <br>
 # Database
 this system uses sqlite3 database to store and manage data. data
-like voting pools, and users ID's. here are some of the Features
+like voting pools, and users ID's. here are some of the Features:
 * create a voting pool with x Options
 * Database to ui communication via Chart.js
 * easy login system
@@ -38,7 +38,7 @@ like voting pools, and users ID's. here are some of the Features
 the server is a simple Node.js server that uses Express.js to 
 handle the requests. it uses a mix of endPoints and terminal
 commands to give the user a full control over the server. 
-<br>
+<br> <br>
 One of the server features in the monitor command. if you use 
 ````monitor```` in the server terminal it will open a new window 
-that starts monitoring the server requests.
+that starts monitoring the server requests. 

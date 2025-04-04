@@ -9,7 +9,6 @@ function viewPool(userId) {
                 console.log('Fetched pool data:', pool);
 
                 const teamSelect = document.getElementById('team-select');
-                const voteButton = document.getElementById('vote-button');
                 teamSelect.innerHTML = '';
                 pool.options.forEach(option => {
                     const optionElement = document.createElement('option');
@@ -18,13 +17,7 @@ function viewPool(userId) {
                     teamSelect.appendChild(optionElement);
                 });
 
-                if (pool.votes[userId]) {
-                    teamSelect.style.display = 'none';
-                    voteButton.style.display = 'none';
-                } else {
-                    teamSelect.style.display = 'block';
-                    voteButton.style.display = 'block';
-                }
+
 
                 displayChart(pool);
             }

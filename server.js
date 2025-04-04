@@ -9,25 +9,51 @@ const fs = require('fs');
 const crypto = require('crypto');
 const net = require('net');
 
-function isPortAvailable(port, callback) {
-    const server = net.createServer();
-    server.once('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            callback(false);
-        } else {
-            callback(false);
-        }
+function checkPortAvailability(port) {
+    return new Promise((resolve) => {
+        exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+            resolve(stdout.trim() === "");
+        });
     });
-    server.once('listening', () => {
-        server.close();
-        callback(true);
-    });
-    server.listen(port);
 }
 
 function encryptID(id) {
     return crypto.createHash('sha256').update(id).digest('hex');
 }
+function startSpinner(duration) {
+    const spinner = ['/', '-', '\\', '|'];
+    let i = 0;
+
+    process.stdin.setRawMode(true);
+    process.stdin.pause();
+
+    const spinnerInterval = setInterval(() => {
+        process.stdout.write(`\r${spinner[i]}`);
+        i = (i + 1) % spinner.length;
+    }, 250);
+
+    setTimeout(() => {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r    \r');
+        process.stdin.resume();
+    }, duration);
+}
+
+function loadActivePool() {
+    if (fs.existsSync('activePool.json')) {
+        const data = JSON.parse(fs.readFileSync('activePool.json'));
+        activePool = data.activePool || 'Team Selection';
+        console.log(`Active pool loaded from file: ${activePool}`);
+    } else {
+        activePool = 'Team Selection';
+        console.log('No active pool file found. Defaulting to "Team Selection"');
+    }
+}
+
+function saveActivePool() {
+    fs.writeFileSync('activePool.json', JSON.stringify({ activePool }), 'utf-8');
+}
+
 
 const app = express();
 app.use(cors());
@@ -37,7 +63,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 let activePool = 'Team Selection';
 let server;
 let monitorActive = false;
-let serverPort = 3000;
+let serverPort = 3050;
+
+loadActivePool()
 
 app.post('/add-voter', (req, res) => {
     const { id, name } = req.body;
@@ -113,21 +141,34 @@ app.get('/', (req, res) => {
 
 const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
-});
-rl.on('line', (input) => {
+    output: process.stdout,
+    terminal: true
+});rl.on('line', (input) => {
     const [command, ...args] = input.split(' ');
+    const commandLower = command.toLowerCase();  // Convert command to lowercase
 
-    if (command === 'start') {
+    if (commandLower === 'start') {
         if (!server) {
-            server = app.listen(serverPort, '0.0.0.0', () => {
-                console.log(`Server running on http://0.0.0.0:${serverPort}`);
+            checkPortAvailability(serverPort).then((available) => {
+                if (available) {
+                    let randomDelay = Math.floor(Math.random() * 2000) + 1000;
+                    startSpinner(randomDelay);
+                    setTimeout(() => {
+                        server = app.listen(serverPort, '0.0.0.0', () => {
+                            console.log(`Server running on http://0.0.0.0:${serverPort}`);
+                        });
+                    }, randomDelay);
+                } else {
+                    console.log(`Port ${serverPort} is in use. Please choose another port.`);
+                }
             });
         } else {
             console.log('Server is already running.');
         }
-    } else if (command === 'stop') {
+    } else if (commandLower === 'stop') {
+        let randomDelay = Math.floor(Math.random() * 2000) + 1000;
         if (server) {
+            console.log('Stopping server...');
             server.close(() => {
                 console.log('Server stopped.');
                 server = null;
@@ -135,13 +176,13 @@ rl.on('line', (input) => {
         } else {
             console.log('Server is not running.');
         }
-     } else if (command === 'port') {
+    } else if (commandLower === 'port') {
         if (server) {
             console.log('Cannot change port while server is running. Stop the server first.');
         } else {
             const newPort = parseInt(args[0], 10);
             if (!isNaN(newPort) && newPort >= 1024 && newPort <= 65535) {
-                isPortAvailable(newPort, (available) => {
+                checkPortAvailability(newPort).then((available) => {
                     if (available) {
                         serverPort = newPort;
                         console.log(`Port changed to ${serverPort}. Start the server to apply changes.`);
@@ -153,10 +194,26 @@ rl.on('line', (input) => {
                 console.log('Invalid port number. Choose a number between 1024 and 65535.');
             }
         }
-    } else if (command === 'add') {
+    } else if (commandLower === 'restart') {
+        if (server) {
+            console.log('Server restarting...');
+            let randomDelay = Math.floor(Math.random() * 2000) + 1000;
+            startSpinner(randomDelay);
+            setTimeout(() => {
+                console.log('\nServer is now running...');
+                server.close(() => {
+                    server = app.listen(serverPort, '0.0.0.0', () => {
+                        console.log(`Server running on http://0.0.0.0:${serverPort}`);
+                    });
+                });
+            }, randomDelay);
+        } else {
+            console.log('Server is not running.');
+        }
+    } else if (commandLower === 'add') {
         const [type, ...details] = args;
 
-        if (type === 'voter') {
+        if (type.toLowerCase() === 'voter') {
             if (details.length !== 2) {
                 console.log('Usage: add voter <id> <name>');
                 return;
@@ -171,7 +228,7 @@ rl.on('line', (input) => {
                     console.log('Voter added successfully');
                 }
             });
-        } else if (type === 'pool') {
+        } else if (type.toLowerCase() === 'pool') {
             if (details.length < 2) {
                 console.log('Usage: add pool <poolName> <option1> <option2> ...');
                 return;
@@ -183,10 +240,7 @@ rl.on('line', (input) => {
             db.run('DELETE FROM pool WHERE poolName = ?', [poolName], (err) => {
                 if (err) {
                     console.log('Error deleting previous pool:', err.message);
-                } else {
-                    console.log('Previous pool deleted (if existed).');
                 }
-
                 db.run('INSERT INTO pool (poolName, options, votes) VALUES (?, ?, ?)', [poolName, JSON.stringify(options), JSON.stringify(votes)], (err) => {
                     if (err) {
                         console.log('Error adding pool:', err.message);
@@ -197,14 +251,15 @@ rl.on('line', (input) => {
 
                 activePool = poolName;
                 console.log(`Active pool set to: ${activePool}`);
+                saveActivePool()
             });
         } else {
             console.log('Unknown type. Usage: add <voter|pool>');
         }
-    } else if (command === 'remove') {
+    } else if (commandLower === 'remove') {
         const [type, id] = args;
 
-        if (type === 'voter' && id) {
+        if (type.toLowerCase() === 'voter' && id) {
             const encryptedId = encryptID(id);
 
             db.run('DELETE FROM voters WHERE id = ?', [encryptedId], (err) => {
@@ -217,7 +272,7 @@ rl.on('line', (input) => {
         } else {
             console.log('Usage: remove voter <id>');
         }
-    } else if (command === 'monitor') {
+    } else if (commandLower === 'monitor') {
         const logFile = path.join(__dirname, 'server.log');
 
         exec('node monitor.js', (err, stdout, stderr) => {
@@ -229,12 +284,12 @@ rl.on('line', (input) => {
         } else {
             exec(`gnome-terminal -- bash -c "node monitor.js; exec bash"`);
         }
-        const logStream = fs.createWriteStream(logFile, { flags: 'a' });
-        app.use(morgan('combined', { stream: logStream }));
+        const logStream = fs.createWriteStream(logFile, {flags: 'a'});
+        app.use(morgan('combined', {stream: logStream}));
 
         monitorActive = true;
         console.log('Monitoring server traffic in a new terminal.');
-    } else if (command === 'wipedb') {
+    } else if (commandLower === 'wipedb') {
         db.serialize(() => {
             db.run('DELETE FROM voters', (err) => {
                 if (err) {
@@ -252,19 +307,79 @@ rl.on('line', (input) => {
                 console.log('All pool records have been deleted.');
             });
         });
+    } else if (commandLower === 'cls') {
+        console.clear();
+    } else if (commandLower === 'show') {
+        const [type] = args;
+
+        if (type && type.toLowerCase() === 'pool') {
+            db.get('SELECT * FROM pool WHERE poolName = ?', [activePool], (err, row) => {
+                if (err) {
+                    console.error('Error fetching pool:', err.message);
+                    return;
+                }
+                if (row) {
+                    row.options = JSON.parse(row.options);
+                    console.log(`Current Pool: ${activePool}`);
+                    console.log('Options:', row.options.join(', '));
+                    return;
+                }
+                console.log(`Pool "${activePool}" not found.`);
+            });
+        } else {
+            db.all('SELECT name FROM voters', [], (err, rows) => {
+                if (err) {
+                    console.error('Error fetching users:', err.message);
+                    return;
+                }
+                if (rows.length === 0) {
+                    console.log('No users found.');
+                } else {
+                    console.log('List of users:');
+                    rows.forEach((row) => {
+                        console.log(row.name);
+                    });
+                }
+            });
+        }
+    } else if (commandLower === 'taskkill' ) {
+        exec('taskkill /F /IM node.exe', (err, stdout, stderr) => {
+            if (err) {
+                console.error(`Error executing taskkill: ${err.message}`);
+                return;
+            }
+            console.log('Node processes terminated.');
+        });
+    }   else if (commandLower === 'help' || commandLower === 'h' || commandLower === '?') {
+        console.log(`
+        Commands:
+        - start: Start the server
+        - stop: Stop the server
+        - port <number>: Change the server port (stop the server first)
+        - restart: Restart the server
+        - add voter <id> <name>: Add a new voter
+        - add pool <poolName> <option1> <option2> ...: Add a new voting pool
+        - remove voter <id>: Remove a voter
+        - monitor: Monitor server traffic in a new terminal
+        - wipedb: Delete all voters and pool records
+        - cls: Clear the console
+        - showusers: Show a list of all voters
+        - taskkill: Terminate all node processes
+        - help or h or ?: Show this help message
+        `);
     } else {
         console.log('Unknown command');
     }
 });
 
+
 process.on('exit', () => {
-    exec('taskkill /F /IM node.exe', (err, stdout, stderr) => {
-        if (err) {
-            console.error(`Error executing taskkill: ${err.message}`);
-            return;
-        }
-        console.log('Node processes terminated.');
-    });
+    if (server) {
+        console.log('Force closing the server...');
+        server.close(() => {
+            console.log('Server closed.');
+        });
+    }
 });
 
 console.log('Type "start" to start the server, "stop" to stop it :)');

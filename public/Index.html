@@ -21,11 +21,12 @@
     <div id="pool">
         <select id="team-select"></select>
         <button id="vote-button" onclick="vote()">Vote</button>
+
+        <canvas id="vote-chart"></canvas>
+        <button id="refresh-button" onclick="refreshChart()">Refresh Chart</button>
     </div>
 </div>
 
-<canvas id="vote-chart"></canvas>
-<button id="refresh-button" onclick="refreshChart()">Refresh Chart</button>
 
 <script>
     function login() {
@@ -47,6 +48,7 @@
                     document.getElementById('view-container').style.display = 'block';
                     document.getElementById('refresh-button').style.display = 'block';
                     fetchTeams();
+                    refreshChart();
                 } else {
                     document.getElementById('message').innerText = 'Login failed: ' + data.message;
                 }
