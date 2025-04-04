@@ -7,6 +7,23 @@ const { exec } = require('child_process');
 const morgan = require('morgan');
 const fs = require('fs');
 const crypto = require('crypto');
+const net = require('net');
+
+function isPortAvailable(port, callback) {
+    const server = net.createServer();
+    server.once('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            callback(false);
+        } else {
+            callback(false);
+        }
+    });
+    server.once('listening', () => {
+        server.close();
+        callback(true);
+    });
+    server.listen(port);
+}
 
 function encryptID(id) {
     return crypto.createHash('sha256').update(id).digest('hex');
@@ -20,6 +37,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let activePool = 'Team Selection';
 let server;
 let monitorActive = false;
+let serverPort = 3000;
 
 app.post('/add-voter', (req, res) => {
     const { id, name } = req.body;
@@ -102,8 +120,8 @@ rl.on('line', (input) => {
 
     if (command === 'start') {
         if (!server) {
-            server = app.listen(3000, '0.0.0.0', () => {
-                console.log('Server running on http://0.0.0.0:3000');
+            server = app.listen(serverPort, '0.0.0.0', () => {
+                console.log(`Server running on http://0.0.0.0:${serverPort}`);
             });
         } else {
             console.log('Server is already running.');
@@ -117,6 +135,24 @@ rl.on('line', (input) => {
         } else {
             console.log('Server is not running.');
         }
+     } else if (command === 'port') {
+        if (server) {
+            console.log('Cannot change port while server is running. Stop the server first.');
+        } else {
+            const newPort = parseInt(args[0], 10);
+            if (!isNaN(newPort) && newPort >= 1024 && newPort <= 65535) {
+                isPortAvailable(newPort, (available) => {
+                    if (available) {
+                        serverPort = newPort;
+                        console.log(`Port changed to ${serverPort}. Start the server to apply changes.`);
+                    } else {
+                        console.log(`Port ${newPort} is in use or unavailable.`);
+                    }
+                });
+            } else {
+                console.log('Invalid port number. Choose a number between 1024 and 65535.');
+            }
+        }
     } else if (command === 'add') {
         const [type, ...details] = args;
 
@@ -126,9 +162,8 @@ rl.on('line', (input) => {
                 return;
             }
             const [id, name] = details;
-            const encryptedId = encryptID(id); // Encrypt the ID
+            const encryptedId = encryptID(id);
 
-            // Add voter with encrypted ID
             db.run('INSERT INTO voters (id, name) VALUES (?, ?)', [encryptedId, name], (err) => {
                 if (err) {
                     console.log('Error adding voter:', err.message);
@@ -145,7 +180,6 @@ rl.on('line', (input) => {
             const options = details.slice(1);
             const votes = {};
 
-            // Delete the previous pool if it exists
             db.run('DELETE FROM pool WHERE poolName = ?', [poolName], (err) => {
                 if (err) {
                     console.log('Error deleting previous pool:', err.message);
@@ -153,7 +187,6 @@ rl.on('line', (input) => {
                     console.log('Previous pool deleted (if existed).');
                 }
 
-                // Add the new pool to the database
                 db.run('INSERT INTO pool (poolName, options, votes) VALUES (?, ?, ?)', [poolName, JSON.stringify(options), JSON.stringify(votes)], (err) => {
                     if (err) {
                         console.log('Error adding pool:', err.message);
@@ -162,7 +195,6 @@ rl.on('line', (input) => {
                     }
                 });
 
-                // Set the new pool as active
                 activePool = poolName;
                 console.log(`Active pool set to: ${activePool}`);
             });
@@ -173,9 +205,8 @@ rl.on('line', (input) => {
         const [type, id] = args;
 
         if (type === 'voter' && id) {
-            const encryptedId = encryptID(id); // Encrypt the ID for removal
+            const encryptedId = encryptID(id);
 
-            // Remove voter based on encrypted ID
             db.run('DELETE FROM voters WHERE id = ?', [encryptedId], (err) => {
                 if (err) {
                     console.log('Error removing voter:', err.message);
