@@ -13,19 +13,19 @@ then use the following command to install the modules:<br>
 npm install
 ```
 # Content And Feature
-Here is a user guide on how to use this Voting system.<br>
-to start the server you can either use a cmd terminal navigate <br>
-to your voting system folder then use node server.js. Or you <br>
-can double-click the Start-Server.vbs file for silent launch.<br>
+Here is a user guide on how to use this Voting system.
+to start the server you can either use a cmd terminal navigate 
+to your voting system folder then use node server.js. Or you 
+can double-click the Start-Server.vbs file for silent launch.
 <br>
-now your in the voting system terminal. From here you<br>
-can run````port xxxx-x```` to choose a port, Default '3000'. <br>
-then you can run ````start```` to start the server. For a full <br>
-list off commands use````help or ?```` in the server terminal.<br>
+now your in the voting system terminal. From here you
+can run````port xxxx-x```` to choose a port, Default '3000'. 
+then you can run ````start```` to start the server. For a full 
+list off commands use````help or ?```` in the server terminal.
 <br>
 # Database
-this system uses sqlite3 database to store and manage data. data<br>
-like voting pools, and users ID's. here are some of the Features<br>
+this system uses sqlite3 database to store and manage data. data
+like voting pools, and users ID's. here are some of the Features
 * create a voting pool with x Options
 * Database to ui communication via Chart.js
 * easy login system
@@ -35,9 +35,9 @@ like voting pools, and users ID's. here are some of the Features<br>
   * remove command to remove pools and or users
 
 # server
-the server is a simple Node.js server that uses Express.js to <br>
-handle the requests. it uses a mix of endPoints and terminal<br>
-commands to give the user a full control over the server. <br> 
+the server is a simple Node.js server that uses Express.js to 
+handle the requests. it uses a mix of endPoints and terminal
+commands to give the user a full control over the server. 
 <br>
 One of the server features in the monitor command. if you use 
 ````monitor```` in the server terminal it will open a new window 
