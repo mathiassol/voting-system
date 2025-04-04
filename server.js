@@ -384,7 +384,7 @@ const rl = readline.createInterface({
         - monitor: Monitor server traffic in a new terminal
         - wipedb: Delete all voters and pool records
         - cls: Clear the console
-        - showusers: Show a list of all voters
+        - show <users> or <pool>: Show a list of db
         - taskkill: Terminate all node processes
         - help or h or ?: Show this help message
         `);
