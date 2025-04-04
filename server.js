@@ -7,8 +7,9 @@ const { exec } = require('child_process');
 const morgan = require('morgan');
 const fs = require('fs');
 const crypto = require('crypto');
-const net = require('net');
 
+
+//check if port is available
 function checkPortAvailability(port) {
     return new Promise((resolve) => {
         exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
@@ -20,6 +21,8 @@ function checkPortAvailability(port) {
 function encryptID(id) {
     return crypto.createHash('sha256').update(id).digest('hex');
 }
+
+// loading
 function startSpinner(duration) {
     const spinner = ['/', '-', '\\', '|'];
     let i = 0;
@@ -39,6 +42,7 @@ function startSpinner(duration) {
     }, duration);
 }
 
+// loading active pool from file
 function loadActivePool() {
     if (fs.existsSync('activePool.json')) {
         const data = JSON.parse(fs.readFileSync('activePool.json'));
@@ -50,11 +54,13 @@ function loadActivePool() {
     }
 }
 
+// saving active pool to file
 function saveActivePool() {
     fs.writeFileSync('activePool.json', JSON.stringify({ activePool }), 'utf-8');
 }
 
 
+// app settings
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -66,6 +72,17 @@ let monitorActive = false;
 let serverPort = 3050;
 
 loadActivePool()
+
+
+// endpoints (takes db, queries and acts on them)
+// err = error
+// req = request
+// res = response
+// db.get = get data from db
+// db.run = run a query on db
+// ? = placeholder for data
+// insert = insert data into db
+// select = select data from db
 
 app.post('/add-voter', (req, res) => {
     const { id, name } = req.body;
@@ -139,13 +156,18 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+
+// commands / server terminal
+// rl = reddline
+
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true
 });rl.on('line', (input) => {
     const [command, ...args] = input.split(' ');
-    const commandLower = command.toLowerCase();  // Convert command to lowercase
+    const commandLower = command.toLowerCase();
 
     if (commandLower === 'start') {
         if (!server) {
@@ -166,7 +188,6 @@ const rl = readline.createInterface({
             console.log('Server is already running.');
         }
     } else if (commandLower === 'stop') {
-        let randomDelay = Math.floor(Math.random() * 2000) + 1000;
         if (server) {
             console.log('Stopping server...');
             server.close(() => {
