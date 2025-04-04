@@ -39,6 +39,6 @@ the server is a simple Node.js server that uses Express.js to <br>
 handle the requests. it uses a mix of endPoints and terminal<br>
 commands to give the user a full control over the server. <br> 
 <br>
-One of the server features in the monitor command. if you use <br>
-````monitor```` in the server terminal it will open a new window <br>
-that starts monitoring the server requests.<br>
+One of the server features in the monitor command. if you use 
+````monitor```` in the server terminal it will open a new window 
+that starts monitoring the server requests.
